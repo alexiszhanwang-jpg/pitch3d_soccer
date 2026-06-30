@@ -1033,16 +1033,22 @@ class FootballVisionPipeline:
             raise ValueError(f"无法读取图像: {image_path}")
 
         config = self.PITCH_KEYPOINTS
+        field_mask = self._estimate_field_core_mask(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
+        field_mask = cv2.erode(field_mask, np.ones((9, 9), np.uint8), iterations=1)
+        white_mask = self._field_white_line_mask(image, field_mask)
         H_template_to_pixel = np.linalg.inv(frame.pitch.homography)
         template_vertices = config.template_vertices_array().astype(np.float32)
         projected = cv2.perspectiveTransform(template_vertices.reshape(-1, 1, 2), H_template_to_pixel).reshape(-1, 2)
 
+        inlier_indices = set(frame.pitch.inlier_indices)
         for start, end in config.edges:
-            p1 = projected[start]
-            p2 = projected[end]
-            if not (np.isfinite(p1).all() and np.isfinite(p2).all()):
+            # Roboflow-style debug: only draw edges whose endpoints were actually
+            # detected and used by homography. Drawing the full theoretical pitch
+            # through occluded/advertising areas looks like floating lines and is
+            # misleading for broadcast frames.
+            if start not in inlier_indices or end not in inlier_indices:
                 continue
-            cv2.line(image, tuple(np.round(p1).astype(int)), tuple(np.round(p2).astype(int)), (0, 255, 255), 3)
+            self._draw_projected_line_on_field(image, projected[start], projected[end], field_mask, white_mask)
 
         for idx, (x, y, confidence) in enumerate(frame.pitch.keypoints):
             if confidence < self.keypoint_confidence:
@@ -1066,7 +1072,7 @@ class FootballVisionPipeline:
 
         error_text = "n/a" if frame.pitch.reprojection_error is None else f"{frame.pitch.reprojection_error:.2f}m"
         lines = [
-            "yellow = projected pitch lines from homography",
+            "yellow = projected inlier edges overlapping detected field lines",
             "blue = player foot points used for 3D positions",
             f"pitch: {frame.pitch.method} valid/inliers: {frame.pitch.valid_keypoints}/{frame.pitch.inliers} err: {error_text}",
         ]
@@ -1077,6 +1083,40 @@ class FootballVisionPipeline:
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(output_path, image)
+
+    @staticmethod
+    def _draw_projected_line_on_field(image: np.ndarray, p1: np.ndarray, p2: np.ndarray,
+                                      field_mask: np.ndarray, white_mask: np.ndarray) -> None:
+        if not (np.isfinite(p1).all() and np.isfinite(p2).all()):
+            return
+        distance = float(np.linalg.norm(p2 - p1))
+        sample_count = max(12, int(distance / 4.0))
+        points = np.linspace(p1, p2, sample_count)
+        current_segment = []
+        height, width = field_mask.shape[:2]
+
+        def flush_segment() -> None:
+            if len(current_segment) >= 2:
+                polyline = np.round(np.array(current_segment, dtype=np.float32)).astype(np.int32).reshape(-1, 1, 2)
+                cv2.polylines(image, [polyline], False, (0, 255, 255), 3)
+
+        for point in points:
+            x = int(round(float(point[0])))
+            y = int(round(float(point[1])))
+            if 0 <= x < width and 0 <= y < height and field_mask[y, x] > 0 and white_mask[y, x] > 0:
+                current_segment.append((float(point[0]), float(point[1])))
+            else:
+                flush_segment()
+                current_segment = []
+        flush_segment()
+
+    @staticmethod
+    def _field_white_line_mask(image: np.ndarray, field_mask: np.ndarray) -> np.ndarray:
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        white_mask = cv2.inRange(hsv, np.array([0, 0, 145]), np.array([180, 95, 255]))
+        white_mask = cv2.bitwise_and(white_mask, field_mask)
+        white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        return cv2.dilate(white_mask, np.ones((17, 17), np.uint8), iterations=1)
 
     def draw_roboflow_radar_debug(self, frame: VisionFrame, output_path: str,
                                   scale: float = 10.0, padding: int = 60) -> None:
