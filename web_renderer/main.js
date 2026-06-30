@@ -124,6 +124,16 @@ function showSourceImage() {
   imageModal.classList.remove('hidden');
 }
 
+function showPitchDebugImage() {
+  if (!currentGraph) {
+    setStatus('还没有加载场景，无法展示定位诊断', true);
+    return;
+  }
+  sourceImagePreview.src = `/output_real/homography_reprojection_debug.png?t=${Date.now()}`;
+  imageModalTitle.textContent = '定位诊断：黄色=反投影球场线，蓝色=球员脚点';
+  imageModal.classList.remove('hidden');
+}
+
 function hideSourceImage() {
   imageModal.classList.add('hidden');
   sourceImagePreview.removeAttribute('src');
@@ -426,6 +436,7 @@ document.querySelectorAll('[data-camera]').forEach((button) => {
   button.addEventListener('click', () => setCamera(button.dataset.camera));
 });
 document.querySelector('#showSourceImage').addEventListener('click', showSourceImage);
+document.querySelector('#showPitchDebug').addEventListener('click', showPitchDebugImage);
 document.querySelector('#closeSourceImage').addEventListener('click', hideSourceImage);
 imageModal.addEventListener('click', (event) => {
   if (event.target === imageModal) hideSourceImage();

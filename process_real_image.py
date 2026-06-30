@@ -874,8 +874,6 @@ def process_real_image(image_path, annotation_path="annotations.json", output_di
 
         os.makedirs(output_dir, exist_ok=True)
         save_vision_frame(vision_frame, os.path.join(output_dir, "vision_frame.json"))
-        pipeline.draw_debug_overlay(image_path, vision_frame, os.path.join(output_dir, "vision_overlay.png"))
-        pipeline.draw_pitch_keypoints_debug(image_path, vision_frame, os.path.join(output_dir, "pitch_keypoints_debug.png"))
 
         print(f"  球场标定: {vision_frame.pitch.method}")
         print(f"  关键点: {vision_frame.pitch.valid_keypoints} valid / {vision_frame.pitch.inliers} inliers")
@@ -1023,7 +1021,8 @@ def process_real_image(image_path, annotation_path="annotations.json", output_di
         "first_person_view.png", "ground_reprojected_only.png", "ground_reprojected_view.png",
         "wireframe_view.png", "tactical_first_person.png", "overlay.png", "broadcast_view.png",
         "top_down_view.png", "grid_overlay.png", "foot_points_debug.png",
-        "keypoints_detected.png", "relative_positions.png", "relative_positions.json",
+        "keypoints_detected.png", "pitch_keypoints_debug.png", "homography_reprojection_debug.png",
+        "relative_positions.png", "relative_positions.json",
         "broadcast_relative_positions.png", "broadcast_relative_positions.json", "carrier_25d_view.png",
         "scene_graph.json",
     ):
@@ -1033,6 +1032,9 @@ def process_real_image(image_path, annotation_path="annotations.json", output_di
 
     if auto_detect and 'vision_frame' in locals():
         draw_foot_points_debug(image_path, vision_frame, os.path.join(output_dir, "foot_points_debug.png"))
+        pipeline.draw_debug_overlay(image_path, vision_frame, os.path.join(output_dir, "vision_overlay.png"))
+        pipeline.draw_pitch_keypoints_debug(image_path, vision_frame, os.path.join(output_dir, "pitch_keypoints_debug.png"))
+        pipeline.draw_homography_reprojection_debug(image_path, vision_frame, os.path.join(output_dir, "homography_reprojection_debug.png"))
     
     # 1. 第一人称视角（从持球队员视角渲染）
     print("  生成第一人称视角...")

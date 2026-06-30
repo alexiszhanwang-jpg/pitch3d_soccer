@@ -1020,6 +1020,57 @@ class FootballVisionPipeline:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(output_path, image)
 
+    def draw_homography_reprojection_debug(self, image_path: str, frame: VisionFrame, output_path: str) -> None:
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"无法读取图像: {image_path}")
+
+        config = self.PITCH_KEYPOINTS
+        H_world_to_pixel = np.linalg.inv(frame.pitch.homography)
+        world_vertices = config.world_vertices_array().astype(np.float32)
+        projected = cv2.perspectiveTransform(world_vertices.reshape(-1, 1, 2), H_world_to_pixel).reshape(-1, 2)
+
+        for start, end in config.edges:
+            p1 = projected[start]
+            p2 = projected[end]
+            if not (np.isfinite(p1).all() and np.isfinite(p2).all()):
+                continue
+            cv2.line(image, tuple(np.round(p1).astype(int)), tuple(np.round(p2).astype(int)), (0, 255, 255), 3)
+
+        for idx, (x, y, confidence) in enumerate(frame.pitch.keypoints):
+            if confidence < self.keypoint_confidence:
+                continue
+            color = (0, 255, 0) if idx in set(frame.pitch.inlier_indices) else (0, 180, 255)
+            cv2.circle(image, (int(round(x)), int(round(y))), 6, color, -1)
+            cv2.putText(image, str(idx), (int(x) + 6, int(y) - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
+
+        for player in frame.players:
+            fx, fy = player.foot_pixel
+            wx, wy = player.world_position[:2]
+            center = (int(round(fx)), int(round(fy)))
+            cv2.circle(image, center, 5, (255, 0, 0), -1)
+            label = f"#{player.player_id} ({wx:.1f},{wy:.1f})"
+            cv2.putText(image, label, (center[0] + 5, center[1] + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 0), 1)
+
+        if frame.ball is not None:
+            bx, by = frame.ball.pixel
+            cv2.circle(image, (int(round(bx)), int(round(by))), 7, (255, 255, 255), 2)
+            cv2.putText(image, "ball", (int(bx) + 8, int(by) - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+
+        error_text = "n/a" if frame.pitch.reprojection_error is None else f"{frame.pitch.reprojection_error:.2f}m"
+        lines = [
+            "yellow = projected pitch lines from homography",
+            "blue = player foot points used for 3D positions",
+            f"pitch: {frame.pitch.method} valid/inliers: {frame.pitch.valid_keypoints}/{frame.pitch.inliers} err: {error_text}",
+        ]
+        for line_idx, line in enumerate(lines):
+            y = 28 + line_idx * 24
+            cv2.putText(image, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 0, 0), 4)
+            cv2.putText(image, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2)
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(output_path, image)
+
 
 def save_vision_frame(frame: VisionFrame, output_json: str) -> None:
     Path(output_json).parent.mkdir(parents=True, exist_ok=True)
