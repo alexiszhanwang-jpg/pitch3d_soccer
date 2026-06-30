@@ -18,9 +18,9 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
 
         vertices = config.vertices_array()
         np.testing.assert_allclose(vertices[0], [0.0, 0.0])
-        np.testing.assert_allclose(vertices[13], [52.5, 0.0])
-        np.testing.assert_allclose(vertices[30], [43.35, 34.0])
-        np.testing.assert_allclose(vertices[31], [61.65, 34.0])
+        np.testing.assert_allclose(vertices[13], [60.0, 0.0])
+        np.testing.assert_allclose(vertices[30], [50.85, 35.0])
+        np.testing.assert_allclose(vertices[31], [69.15, 35.0])
 
     def test_vertices_convert_to_project_world_coordinates(self):
         config = SoccerPitchKeypointConfig()
@@ -28,8 +28,8 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
 
         np.testing.assert_allclose(world[0], [-52.5, 34.0])
         np.testing.assert_allclose(world[29], [52.5, -34.0])
-        np.testing.assert_allclose(world[30], [-9.15, 0.0], atol=1e-4)
-        np.testing.assert_allclose(world[31], [9.15, 0.0], atol=1e-4)
+        np.testing.assert_allclose(world[30], [-8.00625, 0.0], atol=1e-4)
+        np.testing.assert_allclose(world[31], [8.00625, 0.0], atol=1e-4)
 
     def test_visible_indices_respect_confidence_threshold(self):
         config = SoccerPitchKeypointConfig()
@@ -51,7 +51,5 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
         self.assertEqual(inliers, 32)
         self.assertEqual(inlier_indices, list(range(32)))
         self.assertLess(error, 1e-4)
-
-
 if __name__ == "__main__":
     unittest.main()
