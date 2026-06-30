@@ -1,0 +1,67 @@
+# macOS / editor
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Local agent/tool metadata
+.agents/
+.claude/
+.continue/
+.hermes/
+.kiro/
+.lingma/
+.omo/
+.qwen/
+.trae/
+skills/
+skills-lock.json
+openspec/
+
+# Runtime outputs
+output/
+output_direct/
+output_real/
+input/uploads/
+
+# Large local media / datasets / training artifacts
+output_fifa/
+data/frames/
+data/datasets/
+data/soccernet_cal/
+PitchIQ/
+
+# YOLO training runs: keep only selected lightweight deployment weights via force-add when needed
+runs/
+yolov8n.pt
+
+# Historical scratch notes / local calibration scratch
+2.md
+2026-*-input.txt
+auto_h_*.npy
+auto_keypoint_mapping.json
+prediction_to_gt_mapping.json
+
+# Legacy/local experiment scripts not needed for minimal web app
+AGENTS.md
+annotate_keypoints.py
+annotate_players.py
+annotate_yolo_boxes.py
+annotator.py
+auto_label_frames.py
+build_keypoint_mapping.py
+calc_auto_mapping.py
+convert_distill_jsonl_to_yolo.py
+fifa_downloader.py
+filter_broadcast_frames.py
+run_vision_pipeline.py
+test_conservative_bootstrap.py

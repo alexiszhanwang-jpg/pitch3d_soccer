@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Football Scene Graph Renderer</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="app">
+    <aside class="panel">
+      <h1>Football 3D Preview</h1>
+      <p>上传一张比赛截图，自动识别并用 Three.js 渲染低模 VAR-lite 场景。</p>
+      <label class="file-picker primary">
+        <span>上传比赛截图并生成 3D</span>
+        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" />
+      </label>
+      <label class="file-picker">
+        <span>或选择已有 scene_graph.json</span>
+        <input id="fileInput" type="file" accept="application/json,.json" />
+      </label>
+      <div class="buttons">
+        <button data-camera="tactical">战术俯视</button>
+        <button data-camera="follow">选中球员跟随</button>
+        <button data-camera="fpv">选中球员第一人称</button>
+        <button id="showSourceImage" type="button">展示原图</button>
+      </div>
+      <p id="selection" class="selection">未选中球员：点击场上球员即可观察。</p>
+      <p id="status" class="status">等待加载 scene graph...</p>
+      <dl id="stats"></dl>
+      <p class="hint">上传识别请用：<code>python3 server.py</code></p>
+    </aside>
+    <section id="viewport" class="viewport"></section>
+ </main>
+  <div id="imageModal" class="image-modal hidden">
+    <div class="image-modal__toolbar">
+      <span id="imageModalTitle">原图</span>
+      <button id="closeSourceImage" type="button">关闭</button>
+    </div>
+    <img id="sourceImagePreview" alt="原始输入图" />
+  </div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

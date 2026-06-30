@@ -1,0 +1,21 @@
+{
+  "image_path": "input/ScreenShot_2026-06-09_001335_020.png",
+  "image_size": [1558, 602],
+  "points": {
+    "halfway_top": [1180, 45],
+    "halfway_bottom": [1180, 557],
+    "center_circle_bottom": [1180, 460],
+    "penalty_box_left_bottom": [255, 515],
+    "goal_line_bottom": [35, 490]
+  },
+  "world_coords": {
+    "halfway_top": [0, 34],
+    "halfway_bottom": [0, -34],
+    "center_circle_bottom": [0, -9.15],
+    "penalty_box_left_bottom": [-36, -20.16],
+    "goal_line_bottom": [-52.5, -3.66]
+  },
+  "players": {
+    "ball_carrier_idx": 6
+  }
+}

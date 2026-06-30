@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #07140c; color: #f3fff5; }
+.app { display: grid; grid-template-columns: 320px 1fr; width: 100vw; height: 100vh; }
+.panel { padding: 20px; background: rgba(5, 18, 10, 0.94); border-right: 1px solid rgba(255,255,255,0.12); overflow: auto; }
+h1 { margin: 0 0 12px; font-size: 22px; }
+p { color: #bdd6c3; line-height: 1.5; }
+code { color: #d9f99d; }
+.file-picker { display: block; margin: 18px 0; padding: 12px; border: 1px dashed #6ee7b7; border-radius: 10px; cursor: pointer; color: #dcfce7; }
+.file-picker.primary { border-style: solid; background: rgba(34, 197, 94, 0.14); }
+.file-picker input { display: block; margin-top: 10px; width: 100%; }
+.buttons { display: grid; gap: 8px; margin: 18px 0; }
+button { border: 0; border-radius: 8px; padding: 10px 12px; color: #06220f; background: #86efac; font-weight: 700; cursor: pointer; }
+button:hover { background: #bbf7d0; }
+.status { min-height: 22px; margin: 10px 0 16px; color: #fde68a; font-weight: 700; }
+.status.error { color: #fca5a5; }
+.selection { min-height: 22px; margin: 8px 0; color: #bfdbfe; font-weight: 700; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 14px; }
+dt { color: #86efac; }
+dd { margin: 0; color: #f7fee7; }
+.hint { font-size: 13px; color: #9ca3af; }
+.viewport { position: relative; width: 100%; height: 100%; }
+.viewport canvas { display: block; width: 100%; height: 100%; }
+.image-modal { position: fixed; inset: 24px; z-index: 10; display: grid; grid-template-rows: auto 1fr; background: rgba(2, 8, 5, 0.96); border: 1px solid rgba(255,255,255,0.22); border-radius: 14px; box-shadow: 0 24px 80px rgba(0,0,0,0.55); overflow: hidden; }
+.image-modal.hidden { display: none; }
+.image-modal__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(15, 39, 24, 0.96); color: #dcfce7; font-weight: 700; }
+.image-modal img { width: 100%; height: 100%; object-fit: contain; background: #020805; }
