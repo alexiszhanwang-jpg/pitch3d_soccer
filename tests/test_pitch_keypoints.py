@@ -31,6 +31,13 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
         np.testing.assert_allclose(world[30], [-8.00625, 0.0], atol=1e-4)
         np.testing.assert_allclose(world[31], [8.00625, 0.0], atol=1e-4)
 
+    def test_template_world_conversion_round_trip(self):
+        config = SoccerPitchKeypointConfig()
+        template = config.template_vertices_array()
+        world = config.template_to_world(template)
+
+        np.testing.assert_allclose(config.world_to_template(world), template, atol=1e-4)
+
     def test_visible_indices_respect_confidence_threshold(self):
         config = SoccerPitchKeypointConfig()
         keypoints = [(0.0, 0.0, 0.1), (1.0, 1.0, 0.8), (2.0, 2.0, 0.5)]
@@ -40,8 +47,8 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
     def test_homography_estimation_reports_valid_and_inlier_indices(self):
         pipeline = FootballVisionPipeline(object_model_path=None, keypoint_confidence=0.5)
         config = SoccerPitchKeypointConfig()
-        world = config.world_vertices_array()
-        image_points = np.column_stack([world[:, 0] * 10.0 + 960.0, world[:, 1] * -10.0 + 540.0])
+        template = config.template_vertices_array()
+        image_points = np.column_stack([template[:, 0] * 10.0 + 100.0, template[:, 1] * 10.0 + 80.0])
         keypoints = [(float(x), float(y), 0.9) for x, y in image_points]
 
         H, valid_count, inliers, error, inlier_indices = pipeline._estimate_homography_from_keypoints(keypoints)
@@ -51,5 +58,8 @@ class SoccerPitchKeypointConfigTests(unittest.TestCase):
         self.assertEqual(inliers, 32)
         self.assertEqual(inlier_indices, list(range(32)))
         self.assertLess(error, 1e-4)
+
+        projected_template = FootballVisionPipeline.pixel_to_template(H, image_points[0, 0], image_points[0, 1])
+        np.testing.assert_allclose(projected_template, template[0], atol=1e-4)
 if __name__ == "__main__":
     unittest.main()

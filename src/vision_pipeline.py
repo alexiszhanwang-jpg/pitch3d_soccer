@@ -250,14 +250,14 @@ class FootballVisionPipeline:
         if valid_count < 6:
             return None, valid_count, 0, None, []
 
-        world_points = self.PITCH_KEYPOINTS.world_vertices_array()
-        H, status = cv2.findHomography(image_points[valid], world_points[valid], cv2.RANSAC, 5.0)
+        template_points = self.PITCH_KEYPOINTS.template_vertices_array()
+        H, status = cv2.findHomography(image_points[valid], template_points[valid], cv2.RANSAC, 5.0)
         if H is None or status is None:
             return None, valid_count, 0, None, []
 
         inlier_mask = status.ravel().astype(bool)
         reprojected = cv2.perspectiveTransform(image_points[valid].reshape(-1, 1, 2), H).reshape(-1, 2)
-        errors = np.linalg.norm(reprojected - world_points[valid], axis=1)
+        errors = np.linalg.norm(reprojected - template_points[valid], axis=1)
         reproj_error = float(errors[inlier_mask].mean()) if inlier_mask.any() else float(errors.mean())
         inlier_indices = [int(idx) for idx in valid_indices[inlier_mask]]
         return H, valid_count, int(inlier_mask.sum()), reproj_error, inlier_indices
@@ -268,9 +268,10 @@ class FootballVisionPipeline:
             [[width * 0.50, height * 0.55]],
             [[width * 0.85, height * 0.80]],
         ], dtype=np.float32)
-        world = cv2.perspectiveTransform(sample_pixels, H).reshape(-1, 2)
-        if not np.isfinite(world).all():
+        template = cv2.perspectiveTransform(sample_pixels, H).reshape(-1, 2)
+        if not np.isfinite(template).all():
             return False
+        world = self.PITCH_KEYPOINTS.template_to_world(template)
         span = np.linalg.norm(world.max(axis=0) - world.min(axis=0))
         return 20.0 <= float(span) <= 140.0
 
@@ -891,9 +892,15 @@ class FootballVisionPipeline:
 
     @staticmethod
     def pixel_to_world(H: np.ndarray, px: float, py: float) -> np.ndarray:
+        template_xy = FootballVisionPipeline.pixel_to_template(H, px, py)
+        world_xy = SoccerPitchKeypointConfig().template_to_world(template_xy.reshape(1, 2))[0]
+        return np.array([world_xy[0], world_xy[1], 0.0], dtype=float)
+
+    @staticmethod
+    def pixel_to_template(H: np.ndarray, px: float, py: float) -> np.ndarray:
         pt = H @ np.array([px, py, 1.0], dtype=float)
         pt /= pt[2]
-        return np.array([pt[0], pt[1], 0.0], dtype=float)
+        return np.array([pt[0], pt[1]], dtype=float)
 
     @staticmethod
     def _is_inside_pitch(world: np.ndarray, margin: float = 0.0) -> bool:
@@ -1026,9 +1033,9 @@ class FootballVisionPipeline:
             raise ValueError(f"无法读取图像: {image_path}")
 
         config = self.PITCH_KEYPOINTS
-        H_world_to_pixel = np.linalg.inv(frame.pitch.homography)
-        world_vertices = config.world_vertices_array().astype(np.float32)
-        projected = cv2.perspectiveTransform(world_vertices.reshape(-1, 1, 2), H_world_to_pixel).reshape(-1, 2)
+        H_template_to_pixel = np.linalg.inv(frame.pitch.homography)
+        template_vertices = config.template_vertices_array().astype(np.float32)
+        projected = cv2.perspectiveTransform(template_vertices.reshape(-1, 1, 2), H_template_to_pixel).reshape(-1, 2)
 
         for start, end in config.edges:
             p1 = projected[start]
@@ -1070,6 +1077,45 @@ class FootballVisionPipeline:
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(output_path, image)
+
+    def draw_roboflow_radar_debug(self, frame: VisionFrame, output_path: str,
+                                  scale: float = 10.0, padding: int = 60) -> None:
+        config = self.PITCH_KEYPOINTS
+        width = int(config.template_length * scale + padding * 2)
+        height = int(config.template_width * scale + padding * 2)
+        canvas = np.full((height, width, 3), (35, 110, 45), dtype=np.uint8)
+
+        def to_px(template_point: Sequence[float]) -> Tuple[int, int]:
+            return (
+                int(round(float(template_point[0]) * scale + padding)),
+                int(round(float(template_point[1]) * scale + padding)),
+            )
+
+        vertices = config.template_vertices_array()
+        for start, end in config.edges:
+            cv2.line(canvas, to_px(vertices[start]), to_px(vertices[end]), (245, 245, 245), 2)
+
+        for player in frame.players:
+            template_xy = self.pixel_to_template(frame.pitch.homography, player.foot_pixel[0], player.foot_pixel[1])
+            color = (255, 255, 255) if player.team == "home" else (0, 130, 255)
+            if player.team == "referee":
+                color = (20, 20, 20)
+            if player.is_ball_carrier:
+                color = (50, 255, 50)
+            cv2.circle(canvas, to_px(template_xy), 7, color, -1)
+            cv2.putText(canvas, f"#{player.player_id}", (to_px(template_xy)[0] + 8, to_px(template_xy)[1] - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 2)
+            cv2.putText(canvas, f"#{player.player_id}", (to_px(template_xy)[0] + 8, to_px(template_xy)[1] - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+
+        if frame.ball is not None:
+            ball_template = self.pixel_to_template(frame.pitch.homography, frame.ball.pixel[0], frame.ball.pixel[1])
+            cv2.circle(canvas, to_px(ball_template), 5, (255, 255, 255), -1)
+
+        cv2.putText(canvas, f"Roboflow template radar: {frame.pitch.method}", (16, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(output_path, canvas)
 
 
 def save_vision_frame(frame: VisionFrame, output_json: str) -> None:

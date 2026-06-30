@@ -134,6 +134,16 @@ function showPitchDebugImage() {
   imageModal.classList.remove('hidden');
 }
 
+function showRadarDebugImage() {
+  if (!currentGraph) {
+    setStatus('还没有加载场景，无法展示 Roboflow Radar', true);
+    return;
+  }
+  sourceImagePreview.src = `/output_real/roboflow_radar_debug.png?t=${Date.now()}`;
+  imageModalTitle.textContent = 'Roboflow Radar：原始 120×70 模板坐标基准';
+  imageModal.classList.remove('hidden');
+}
+
 function hideSourceImage() {
   imageModal.classList.add('hidden');
   sourceImagePreview.removeAttribute('src');
@@ -437,6 +447,7 @@ document.querySelectorAll('[data-camera]').forEach((button) => {
 });
 document.querySelector('#showSourceImage').addEventListener('click', showSourceImage);
 document.querySelector('#showPitchDebug').addEventListener('click', showPitchDebugImage);
+document.querySelector('#showRadarDebug').addEventListener('click', showRadarDebugImage);
 document.querySelector('#closeSourceImage').addEventListener('click', hideSourceImage);
 imageModal.addEventListener('click', (event) => {
   if (event.target === imageModal) hideSourceImage();

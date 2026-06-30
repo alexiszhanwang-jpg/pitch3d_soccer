@@ -59,17 +59,29 @@ class SoccerPitchKeypointConfig:
         (13, 24), (17, 25), (22, 26), (23, 27), (20, 28), (16, 29),
     ])
 
-    def vertices_array(self) -> np.ndarray:
+    def template_vertices_array(self) -> np.ndarray:
         return np.array(self.vertices, dtype=np.float32)
 
+    def vertices_array(self) -> np.ndarray:
+        return self.template_vertices_array()
+
     def world_vertices_array(self) -> np.ndarray:
-        vertices = self.vertices_array()
-        scaled_x = vertices[:, 0] * (self.length / self.template_length)
-        scaled_y = vertices[:, 1] * (self.width / self.template_width)
+        return self.template_to_world(self.template_vertices_array())
+
+    def template_to_world(self, points: np.ndarray) -> np.ndarray:
+        points = np.asarray(points, dtype=np.float32)
+        scaled_x = points[:, 0] * (self.length / self.template_length)
+        scaled_y = points[:, 1] * (self.width / self.template_width)
         return np.column_stack([
             scaled_x - self.length / 2.0,
             self.width / 2.0 - scaled_y,
         ]).astype(np.float32)
+
+    def world_to_template(self, points: np.ndarray) -> np.ndarray:
+        points = np.asarray(points, dtype=np.float32)
+        template_x = (points[:, 0] + self.length / 2.0) * (self.template_length / self.length)
+        template_y = (self.width / 2.0 - points[:, 1]) * (self.template_width / self.width)
+        return np.column_stack([template_x, template_y]).astype(np.float32)
 
     def visible_indices(self, keypoints: Sequence[Keypoint], threshold: float) -> List[int]:
         return [idx for idx, (_, _, confidence) in enumerate(keypoints) if confidence >= threshold]
