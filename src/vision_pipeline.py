@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 from src.player_renderer import Ball, Player, TeamSide
+from src.pitch_keypoints import SoccerPitchKeypointConfig
 from src.view_transformer import CameraParams
 
 
@@ -27,6 +28,8 @@ class DetectedPitch:
     keypoints: List[Tuple[float, float, float]]
     inliers: int = 0
     reprojection_error: Optional[float] = None
+    valid_keypoints: int = 0
+    inlier_indices: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -68,18 +71,7 @@ class VisionFrame:
 class FootballVisionPipeline:
     """转播截图自动识别管线。"""
 
-    # Roboflow football-pitch-detection 常见 32 点模板。
-    # 模板坐标先用左上角为 (0,0)、右下角为 (105,68)，再转换为本项目世界坐标。
-    RF_PITCH_VERTICES = np.array([
-        [0.0, 0.0], [0.0, 13.84], [0.0, 24.84], [0.0, 43.16], [0.0, 54.16], [0.0, 68.0],
-        [5.5, 24.84], [5.5, 43.16], [11.0, 34.0],
-        [16.5, 13.84], [16.5, 24.84], [16.5, 43.16], [16.5, 54.16],
-        [52.5, 0.0], [52.5, 24.84], [52.5, 43.16], [52.5, 68.0],
-        [88.5, 13.84], [88.5, 24.84], [88.5, 43.16], [88.5, 54.16],
-        [99.5, 24.84], [99.5, 43.16],
-        [105.0, 0.0], [105.0, 13.84], [105.0, 24.84], [105.0, 43.16], [105.0, 54.16], [105.0, 68.0],
-        [94.0, 34.0], [52.5, 34.0], [11.0, 34.0],
-    ], dtype=np.float32)
+    PITCH_KEYPOINTS = SoccerPitchKeypointConfig()
 
     def __init__(self,
                  pitch_model_path: str = "data/models/football-pitch-detection.pt",
@@ -202,7 +194,7 @@ class FootballVisionPipeline:
 
     def detect_pitch(self, image: np.ndarray) -> DetectedPitch:
         keypoints = self._detect_pitch_keypoints(image)
-        H_model, inliers, reproj_error = self._estimate_homography_from_keypoints(keypoints)
+        H_model, valid_count, inliers, reproj_error, inlier_indices = self._estimate_homography_from_keypoints(keypoints)
 
         if H_model is not None and self._homography_has_reasonable_scale(H_model, image.shape[1], image.shape[0]):
             return DetectedPitch(
@@ -211,6 +203,8 @@ class FootballVisionPipeline:
                 keypoints=keypoints,
                 inliers=inliers,
                 reprojection_error=reproj_error,
+                valid_keypoints=valid_count,
+                inlier_indices=inlier_indices,
             )
 
         # 旧校准矩阵只适合原始示例截图。换帧/换机位时必须优先使用每帧自动标定，
@@ -222,6 +216,8 @@ class FootballVisionPipeline:
                 keypoints=keypoints,
                 inliers=inliers,
                 reprojection_error=reproj_error,
+                valid_keypoints=valid_count,
+                inlier_indices=inlier_indices,
             )
         raise RuntimeError("无法自动估计球场 homography，且没有可用的校准矩阵文件")
 
@@ -243,25 +239,28 @@ class FootballVisionPipeline:
         return [(float(x), float(y), float(conf)) for x, y, conf in data]
 
     def _estimate_homography_from_keypoints(self, keypoints: Sequence[Tuple[float, float, float]]):
-        if len(keypoints) != len(self.RF_PITCH_VERTICES):
-            return None, 0, None
+        if len(keypoints) != len(self.PITCH_KEYPOINTS.vertices):
+            return None, 0, 0, None, []
 
         image_points = np.array([[x, y] for x, y, conf in keypoints], dtype=np.float32)
         confidences = np.array([conf for x, y, conf in keypoints], dtype=np.float32)
         valid = confidences >= self.keypoint_confidence
-        if int(valid.sum()) < 6:
-            return None, int(valid.sum()), None
+        valid_indices = np.flatnonzero(valid)
+        valid_count = int(valid_indices.size)
+        if valid_count < 6:
+            return None, valid_count, 0, None, []
 
-        world_points = self._rf_vertices_to_world(self.RF_PITCH_VERTICES)
+        world_points = self.PITCH_KEYPOINTS.world_vertices_array()
         H, status = cv2.findHomography(image_points[valid], world_points[valid], cv2.RANSAC, 5.0)
         if H is None or status is None:
-            return None, 0, None
+            return None, valid_count, 0, None, []
 
         inlier_mask = status.ravel().astype(bool)
         reprojected = cv2.perspectiveTransform(image_points[valid].reshape(-1, 1, 2), H).reshape(-1, 2)
         errors = np.linalg.norm(reprojected - world_points[valid], axis=1)
         reproj_error = float(errors[inlier_mask].mean()) if inlier_mask.any() else float(errors.mean())
-        return H, int(inlier_mask.sum()), reproj_error
+        inlier_indices = [int(idx) for idx in valid_indices[inlier_mask]]
+        return H, valid_count, int(inlier_mask.sum()), reproj_error, inlier_indices
 
     def _homography_has_reasonable_scale(self, H: np.ndarray, width: int, height: int) -> bool:
         sample_pixels = np.array([
@@ -277,7 +276,7 @@ class FootballVisionPipeline:
 
     @classmethod
     def _rf_vertices_to_world(cls, vertices: np.ndarray) -> np.ndarray:
-        return np.column_stack([vertices[:, 0] - 52.5, 34.0 - vertices[:, 1]]).astype(np.float32)
+        return SoccerPitchKeypointConfig(vertices=[tuple(point) for point in vertices.tolist()]).world_vertices_array()
 
     def detect_players(self, image: np.ndarray, H: np.ndarray) -> List[DetectedPlayer]:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -967,6 +966,57 @@ class FootballVisionPipeline:
             cv2.putText(image, "ball", (bx + 8, by - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
 
         cv2.putText(image, f"pitch: {frame.pitch.method}", (16, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(output_path, image)
+
+    def draw_pitch_keypoints_debug(self, image_path: str, frame: VisionFrame, output_path: str) -> None:
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"无法读取图像: {image_path}")
+
+        config = self.PITCH_KEYPOINTS
+        keypoints = frame.pitch.keypoints
+        inlier_indices = set(frame.pitch.inlier_indices)
+
+        for start, end in config.edges:
+            if start >= len(keypoints) or end >= len(keypoints):
+                continue
+            sx, sy, sconf = keypoints[start]
+            ex, ey, econf = keypoints[end]
+            if sconf < self.keypoint_confidence or econf < self.keypoint_confidence:
+                continue
+            color = (0, 220, 0) if start in inlier_indices and end in inlier_indices else (0, 220, 255)
+            cv2.line(image, (int(round(sx)), int(round(sy))), (int(round(ex)), int(round(ey))), color, 2)
+
+        for idx, (x, y, conf) in enumerate(keypoints):
+            if conf >= self.keypoint_confidence and idx in inlier_indices:
+                color = (0, 255, 0)
+                radius = 6
+            elif conf >= self.keypoint_confidence:
+                color = (0, 220, 255)
+                radius = 6
+            else:
+                color = (130, 130, 130)
+                radius = 4
+
+            center = (int(round(x)), int(round(y)))
+            cv2.circle(image, center, radius, color, -1)
+            label = config.labels[idx] if idx < len(config.labels) else str(idx)
+            cv2.putText(image, f"{idx}:{label} {conf:.2f}", (center[0] + 6, center[1] - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.36, color, 1)
+
+        error_text = "n/a" if frame.pitch.reprojection_error is None else f"{frame.pitch.reprojection_error:.2f}m"
+        lines = [
+            f"method: {frame.pitch.method}",
+            f"valid/inliers: {frame.pitch.valid_keypoints}/{frame.pitch.inliers}",
+            f"reproj error: {error_text}",
+            "green=inlier yellow=rejected gray=low-conf",
+        ]
+        for line_idx, line in enumerate(lines):
+            y = 28 + line_idx * 24
+            cv2.putText(image, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 0, 0), 4)
+            cv2.putText(image, line, (16, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2)
+
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(output_path, image)
 

@@ -875,8 +875,12 @@ def process_real_image(image_path, annotation_path="annotations.json", output_di
         os.makedirs(output_dir, exist_ok=True)
         save_vision_frame(vision_frame, os.path.join(output_dir, "vision_frame.json"))
         pipeline.draw_debug_overlay(image_path, vision_frame, os.path.join(output_dir, "vision_overlay.png"))
+        pipeline.draw_pitch_keypoints_debug(image_path, vision_frame, os.path.join(output_dir, "pitch_keypoints_debug.png"))
 
         print(f"  球场标定: {vision_frame.pitch.method}")
+        print(f"  关键点: {vision_frame.pitch.valid_keypoints} valid / {vision_frame.pitch.inliers} inliers")
+        if vision_frame.pitch.reprojection_error is not None:
+            print(f"  重投影误差: {vision_frame.pitch.reprojection_error:.2f}m")
         print(f"  识别球员: {len(players)}")
         print(f"  识别足球: {'yes' if vision_frame.ball else 'no'}")
         print(f"  持球者: #{vision_frame.ball_carrier_id}" if vision_frame.ball_carrier_id else "  持球者: 未确定")
